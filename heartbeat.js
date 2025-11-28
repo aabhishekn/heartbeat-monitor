@@ -105,8 +105,63 @@ function groupAndSortEvents(events) {
 }
 
 
+/**
+ * Detect alerts for services that miss `allowedMisses` consecutive heartbeats.
+ *
+ * For each service:
+ *   - Heartbeats are expected every `expectedIntervalSeconds`.
+ *   - Starting from the first heartbeat, we walk forward and see how many
+ *     expected timestamps pass before the next real heartbeat arrives.
+ *   - When the number of consecutive misses reaches `allowedMisses`,
+ *     we record an alert at the time of that last missed heartbeat.
+ *
+ * We only record the first alert per service.
+ */
 function detectAlerts(groupedEvents, expectedIntervalSeconds, allowedMisses) {
-  return [];
+  const alerts = [];
+  const intervalMs = expectedIntervalSeconds * 1000;
+
+  for (const [service, timestamps] of Object.entries(groupedEvents)) {
+    if (!Array.isArray(timestamps) || timestamps.length === 0) {
+      continue;
+    }
+
+    let missesInRow = 0;
+    let expected = new Date(timestamps[0].getTime() + intervalMs);
+    let alertSet = false;
+
+    for (let i = 1; i < timestamps.length && !alertSet; i++) {
+      const actual = timestamps[i];
+
+      // Count all expected heartbeats that should have occurred
+      // before this actual heartbeat.
+      while (expected < actual && !alertSet) {
+        missesInRow += 1;
+
+        if (missesInRow === allowedMisses) {
+          alerts.push({
+            service,
+            alert_at: expected.toISOString(),
+          });
+          alertSet = true;
+          break;
+        }
+
+        expected = new Date(expected.getTime() + intervalMs);
+      }
+
+      if (alertSet) {
+        break;
+      }
+
+      // A heartbeat arrived on time or before the next expected slot,
+      // so we reset the counter and move the expectation forward.
+      missesInRow = 0;
+      expected = new Date(actual.getTime() + intervalMs);
+    }
+  }
+
+  return alerts;
 }
 
 module.exports = {
