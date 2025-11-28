@@ -1,11 +1,9 @@
-// Core heartbeat processing logic.
-
 const fs = require('fs');
 const path = require('path');
 
 /**
  * Parse an ISO timestamp into a Date.
- * Returns null if the value is missing or invalid.
+ * Returns null if invalid.
  */
 function parseTimestamp(value) {
   if (typeof value !== 'string') return null;
@@ -20,12 +18,10 @@ function parseTimestamp(value) {
 
 /**
  * Load events from a JSON file.
- * - Expects a JSON array
- * - Each item should have: { service: string, timestamp: string }
- * - Malformed records are skipped quietly.
+ * - Expects an array of objects
+ * - Keeps only records with a non-empty service and a valid timestamp
  *
- * Returns an array of:
- *   { service: string, timestamp: Date }
+ * Returns: { service: string, timestamp: Date }[]
  */
 function loadEventsFromFile(filePath) {
   const fullPath = path.resolve(filePath);
@@ -51,13 +47,13 @@ function loadEventsFromFile(filePath) {
     const ts = item.timestamp;
 
     if (typeof service !== 'string' || !service.trim()) {
-      // missing or bad service → skip
+      // skip records without a usable service name
       continue;
     }
 
     const parsedTs = parseTimestamp(ts);
     if (!parsedTs) {
-      // missing or invalid timestamp → skip
+      // skip records with missing or bad timestamps
       continue;
     }
 
@@ -71,17 +67,10 @@ function loadEventsFromFile(filePath) {
 }
 
 /**
- * Group events by service and sort each service's events by time.
+ * Group events by service and sort each service's timestamps.
  *
- * Input:
- *   [ { service, timestamp: Date }, ... ]
- *
- * Output:
- *   {
- *     email: [Date, Date, ...],
- *     sms:   [Date, Date, ...],
- *     ...
- *   }
+ * Input:  [{ service, timestamp: Date }, ...]
+ * Output: { [service: string]: Date[] }
  */
 function groupAndSortEvents(events) {
   const groups = {};
@@ -96,7 +85,6 @@ function groupAndSortEvents(events) {
     groups[service].push(ts);
   }
 
-  // Sort timestamps for each service
   for (const service of Object.keys(groups)) {
     groups[service].sort((a, b) => a - b);
   }
@@ -104,18 +92,19 @@ function groupAndSortEvents(events) {
   return groups;
 }
 
-
 /**
- * Detect alerts for services that miss `allowedMisses` consecutive heartbeats.
+ * Detect alerts for services that miss `allowedMisses`
+ * consecutive heartbeats.
  *
  * For each service:
- *   - Heartbeats are expected every `expectedIntervalSeconds`.
- *   - Starting from the first heartbeat, we walk forward and see how many
- *     expected timestamps pass before the next real heartbeat arrives.
- *   - When the number of consecutive misses reaches `allowedMisses`,
- *     we record an alert at the time of that last missed heartbeat.
+ *  - Heartbeats are expected every `expectedIntervalSeconds`.
+ *  - Starting from the first heartbeat, we walk forward in time.
+ *  - For each gap between actual heartbeats we count how many
+ *    expected timestamps fall into that gap.
+ *  - When the counter reaches `allowedMisses`, we record an alert
+ *    at the timestamp of the last missed heartbeat.
  *
- * We only record the first alert per service.
+ * Only the first alert per service is returned.
  */
 function detectAlerts(groupedEvents, expectedIntervalSeconds, allowedMisses) {
   const alerts = [];
@@ -127,14 +116,15 @@ function detectAlerts(groupedEvents, expectedIntervalSeconds, allowedMisses) {
     }
 
     let missesInRow = 0;
-    let expected = new Date(timestamps[0].getTime() + intervalMs);
     let alertSet = false;
+
+    // first expected heartbeat after the first actual one
+    let expected = new Date(timestamps[0].getTime() + intervalMs);
 
     for (let i = 1; i < timestamps.length && !alertSet; i++) {
       const actual = timestamps[i];
 
-      // Count all expected heartbeats that should have occurred
-      // before this actual heartbeat.
+      // check how many expected heartbeats we skipped before this actual one
       while (expected < actual && !alertSet) {
         missesInRow += 1;
 
@@ -150,12 +140,9 @@ function detectAlerts(groupedEvents, expectedIntervalSeconds, allowedMisses) {
         expected = new Date(expected.getTime() + intervalMs);
       }
 
-      if (alertSet) {
-        break;
-      }
+      if (alertSet) break;
 
-      // A heartbeat arrived on time or before the next expected slot,
-      // so we reset the counter and move the expectation forward.
+      // actual heartbeat arrived in time to break the streak
       missesInRow = 0;
       expected = new Date(actual.getTime() + intervalMs);
     }
