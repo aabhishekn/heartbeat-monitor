@@ -1,20 +1,12 @@
 {
   "name": "heartbeat-monitor",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "Simple heartbeat monitoring assignment.",
+  "main": "main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node main.js",
+    "test": "node tests.js"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/aabhishekn/heartbeat-monitor.git"
-  },
-  "keywords": [],
   "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/aabhishekn/heartbeat-monitor/issues"
-  },
-  "homepage": "https://github.com/aabhishekn/heartbeat-monitor#readme",
-  "description": ""
+  "license": "ISC"
 }
