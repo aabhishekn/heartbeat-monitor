@@ -70,10 +70,40 @@ function loadEventsFromFile(filePath) {
   return cleaned;
 }
 
-// Stubs for the next steps (we'll fill these in later)
+/**
+ * Group events by service and sort each service's events by time.
+ *
+ * Input:
+ *   [ { service, timestamp: Date }, ... ]
+ *
+ * Output:
+ *   {
+ *     email: [Date, Date, ...],
+ *     sms:   [Date, Date, ...],
+ *     ...
+ *   }
+ */
 function groupAndSortEvents(events) {
-  return {};
+  const groups = {};
+
+  for (const event of events) {
+    const service = event.service;
+    const ts = event.timestamp;
+
+    if (!groups[service]) {
+      groups[service] = [];
+    }
+    groups[service].push(ts);
+  }
+
+  // Sort timestamps for each service
+  for (const service of Object.keys(groups)) {
+    groups[service].sort((a, b) => a - b);
+  }
+
+  return groups;
 }
+
 
 function detectAlerts(groupedEvents, expectedIntervalSeconds, allowedMisses) {
   return [];
