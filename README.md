@@ -1,27 +1,35 @@
 # Heartbeat Monitor
 
-This is a small Node.js program that processes heartbeat events for multiple services and reports when a service has missed a certain number of consecutive heartbeats.
+This project provides a small Node.js utility for detecting when individual services stop sending expected heartbeat signals.
+It processes a stream of timestamped heartbeat events, identifies gaps in expected intervals, and reports when a service appears to have gone silent.
 
-The implementation follows the requirements from the assignment:
-
-* Load events from `events.json`
-* Ignore malformed events (missing fields or invalid timestamps)
-* Group events by service
-* Sort each service's events chronologically
-* Assume heartbeats are expected every fixed interval (60 seconds)
-* Trigger an alert when a service misses 3 consecutive heartbeats
-* Return output in the required JSON format
+The logic is implemented with straightforward JavaScript using only built-in Node modules, making the tool easy to run, understand, or extend.
 
 ---
 
-## Requirements
+## Overview
 
-* Node.js (v16 or higher recommended)
-* No external npm packages are required
+A heartbeat event is defined as an object containing a service name and an ISO timestamp.
+The monitor performs the following steps:
+
+1. Load all events from a JSON file
+2. Discard malformed or incomplete records
+3. Group events by service
+4. Sort each group chronologically
+5. Traverse each service's heartbeat timeline
+6. Detect when the service misses a configurable number of consecutive expected intervals
+7. Output an alert for each affected service
+
+The default configuration assumes:
+
+* Heartbeats are expected every **60 seconds**
+* An alert is raised after **3 consecutive misses**
+
+These defaults can be adjusted easily inside `main.js`.
 
 ---
 
-## Project Structure
+## File Structure
 
 ```
 heartbeat-monitor/
@@ -32,28 +40,28 @@ heartbeat-monitor/
   └── README.md
 ```
 
-* `main.js` – entry point
-* `heartbeat.js` – core logic
-* `tests.js` – required test cases
-* `events.json` – input file provided in assignment
+* **main.js** — CLI entry point and configuration
+* **heartbeat.js** — all processing logic: validation, grouping, sorting, alert detection
+* **tests.js** — small set of functional tests
+* **events.json** — example data file containing heartbeat events
 
 ---
 
-## Running the Program
+## Running the Monitor
 
-From the project root:
+To execute the script with the bundled example data:
 
-```bash
+```
 npm start
 ```
 
-or
+Or run the entry file directly:
 
-```bash
+```
 node main.js
 ```
 
-This will print an array of alerts, for example:
+The output is printed as a JSON array. Example:
 
 ```json
 [
@@ -64,42 +72,71 @@ This will print an array of alerts, for example:
 ]
 ```
 
+Each alert entry contains:
+
+* the affected service
+* the timestamp where the required number of consecutive misses occurred
+
 ---
 
-## Running Tests
+## Configuration
 
-The assignment requires four scenarios:
+Two values control the detection behavior:
 
-* A working alert case
-* A near-miss case (2 missed heartbeats → no alert)
-* Unordered input
-* At least one malformed event
+```js
+const EXPECTED_INTERVAL_SECONDS = 60;
+const ALLOWED_MISSES = 3;
+```
 
-Run the tests with:
+These can be modified inside `main.js` depending on the expected update frequency of the monitored services.
 
-```bash
+---
+
+## Event Data Format
+
+Input events follow the structure:
+
+```json
+{
+  "service": "service-name",
+  "timestamp": "2025-08-04T10:00:00Z"
+}
+```
+
+Events missing a service name or containing an invalid timestamp are ignored.
+Handling malformed data gracefully ensures that the monitor remains robust even when the input stream is not perfectly clean.
+
+---
+
+## Tests
+
+A lightweight set of tests is included to verify:
+
+* Proper handling of out-of-order events
+* Detection of consecutive missed intervals
+* Non-triggering of alerts when the number of misses is below the threshold
+* Correct ignoring of malformed events
+
+Run them using:
+
+```
 npm test
 ```
 
-or
+or:
 
-```bash
+```
 node tests.js
 ```
 
-You should see:
-
-```
-All tests passed.
-```
-
 ---
 
-## Notes
+## Extending the Monitor
 
-* Malformed events are skipped silently to avoid crashing the program.
-* Only the first alert per service is reported, as described in the assignment.
-* All time calculations use JavaScript's built-in `Date` object.
+Possible enhancements include:
 
+* Reading events from a live stream instead of a static file
+* Writing alerts to a log file or database
+* Adding parameter support through CLI arguments
+* Supporting multiple expected intervals per service
 ---
-
